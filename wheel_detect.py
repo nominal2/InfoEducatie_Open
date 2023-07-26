@@ -1,10 +1,17 @@
 import cv2
 import numpy as np
-
+from simple_pid import PID
 
 cap = cv2.VideoCapture(0)
 cx = None
 cy = None
+
+pan = 90
+tilt = 90
+
+
+def map_range(x, in_min, in_max, out_min, out_max):
+  return (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
 def track(frame):
     global cx,cy
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -16,6 +23,9 @@ def track(frame):
 
 
     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    blur = cv2.GaussianBlur(mask, (5, 5), 0)
+    img_erosion = cv2.erode(blur, np.ones((5, 5)), iterations=1)
+    mask = cv2.dilate(img_erosion, np.ones((3, 3)), iterations=5)
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -50,7 +60,30 @@ while True:
     #print(cx,cy)
     (h, w) = tracked_frame.shape[:2]
     center_point  = int(h/2) , int(w/2)
-    print(center_point)
+    #print(center_point)
+    if cx is not None:
+        if (cx > center_point[1] + 20):
+            pan += 10
+            if pan > 140:
+                pan = 140
+
+        if (cx < center_point[1] - 20):
+            pan -= 10
+            if pan < 40:
+                pan = 40
+
+        if (cy > center_point[0] + 20):
+            tilt += 10
+            if tilt > 140:
+                tilt = 140
+
+        if (cy < center_point[0] - 20):
+            tilt -= 10
+            if tilt < 40:
+                tilt = 40
+    if cx is not None and cx > center_point[1] - 20 and cx < center_point[1] + 20 and cy > center_point[0] - 20 and cy < center_point[0] + 20:
+            cv2.imwrite("picture.jpg",frame)
+    print(pan, tilt)
     cv2.imshow('Tracked', tracked_frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
