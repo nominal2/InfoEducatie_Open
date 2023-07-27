@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from simple_pid import PID
+import PID
 
 cap = cv2.VideoCapture(0)
 cx = None
@@ -8,7 +8,23 @@ cy = None
 
 pan = 90
 tilt = 90
-
+width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+print(width , height)
+P1 = 2
+I1 = 0
+D1 = 0
+pan_target = width/2
+pid1 = PID.PID(P1, I1, D1)
+pid1.SetPoint = pan_target
+pid1.setSampleTime(1)
+P2 = 2
+I2 = 0
+D2 = 0
+tilt_target = height/2
+pid2 = PID.PID(P2, I2, D2)
+pid2.SetPoint = tilt_target
+pid2.setSampleTime(1)
 
 def map_range(x, in_min, in_max, out_min, out_max):
   return (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
@@ -16,10 +32,10 @@ def track(frame):
     global cx,cy
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     #(hMin = 20 , sMin = 127, vMin = 115), (hMax = 41 , sMax = 255, vMax = 199)
-    # lower_yellow = np.array([20, 100, 100])
-    # upper_yellow = np.array([40, 255, 255])
-    lower_yellow = np.array([20, 127, 115])
-    upper_yellow = np.array([40, 255, 199])
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([40, 255, 255])
+    # lower_yellow = np.array([20, 127, 115])
+    # upper_yellow = np.array([40, 255, 199])
 
 
     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
@@ -62,28 +78,17 @@ while True:
     center_point  = int(h/2) , int(w/2)
     #print(center_point)
     if cx is not None:
-        if (cx > center_point[1] + 20):
-            pan += 10
-            if pan > 140:
-                pan = 140
+        pid1.update(cx)
+        target_pwm1 = pid1.output
+        target_pwm1 = map_range(target_pwm1,-640,640,40,140)
+        pid2.update(cy)
+        target_pwm2 = pid2.output
+        target_pwm2 = map_range(target_pwm2, 480, -480, 40, 140)
+        print(target_pwm1, target_pwm2)
 
-        if (cx < center_point[1] - 20):
-            pan -= 10
-            if pan < 40:
-                pan = 40
-
-        if (cy > center_point[0] + 20):
-            tilt += 10
-            if tilt > 140:
-                tilt = 140
-
-        if (cy < center_point[0] - 20):
-            tilt -= 10
-            if tilt < 40:
-                tilt = 40
     if cx is not None and cx > center_point[1] - 20 and cx < center_point[1] + 20 and cy > center_point[0] - 20 and cy < center_point[0] + 20:
             cv2.imwrite("picture.jpg",frame)
-    print(pan, tilt)
+    #print(pan, tilt)
     cv2.imshow('Tracked', tracked_frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
