@@ -1,4 +1,4 @@
-import cv2
+import socket,cv2, pickle,struct
 import numpy as np
 
 class EuclideanTracker:
@@ -72,16 +72,30 @@ class EuclideanTracker:
 
         return self.objects
 
-
 euclidean_tracker = EuclideanTracker(max_disappeared=50, max_distance=50)
 cascade_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-cap = cv2.VideoCapture(0)
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
 
+client_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+host_ip = '192.168.27.252' 
+port = 9999
+client_socket.connect((host_ip,port)) 
+data = b""
+payload_size = struct.calcsize("Q")
+while True:
+    while len(data) < payload_size:
+        packet = client_socket.recv(4*1024) 
+        if not packet: break
+        data+=packet
+    packed_msg_size = data[:payload_size]
+    data = data[payload_size:]
+    msg_size = struct.unpack("Q",packed_msg_size)[0]
+    
+    while len(data) < msg_size:
+        data += client_socket.recv(4*1024)
+    frame_data = data[:msg_size]
+    data  = data[msg_size:]
+    frame = pickle.loads(frame_data)
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     persons = cascade_classifier.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
@@ -98,12 +112,8 @@ while cap.isOpened():
         cv2.putText(frame, f"ID: {object_id}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)
 
-    # Display the frame with detected persons and their IDs (optional)
-    cv2.imshow("Frame", frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    cv2.imshow("RECEIVING VIDEO",frame)
+    key = cv2.waitKey(1) & 0xFF
+    if key  == ord('q'):
         break
-
-# Release video capture and close any open windows
-cap.release()
-cv2.destroyAllWindows()
+client_socket.close()
